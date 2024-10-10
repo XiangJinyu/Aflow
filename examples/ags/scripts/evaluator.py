@@ -21,7 +21,7 @@ from sympy.parsing.sympy_parser import parse_expr
 from tqdm.asyncio import tqdm_asyncio
 
 from examples.ags.benchmark.gsm8k import optimize_gsm8k_evaluation
-from examples.ags.benchmark.math import optimize_math_evaluation
+from examples.ags.benchmark.Math import optimize_math_evaluation
 from examples.ags.benchmark.humaneval import optimize_humaneval_evaluation
 from examples.ags.benchmark.hotpotqa import optimize_hotpotqa_evaluation
 from examples.ags.benchmark.mbpp import optimize_mbpp_evaluation
@@ -103,16 +103,17 @@ class Evaluator:
             return graph_class(name="Gsm8K", llm_config=llm_config, dataset=dataset)
 
         if test:
-            data_path = "examples/ags/scripts/data/gsm8k_test.jsonl"  # 替换为您的JSONL文件路径
+            data_path = "examples/ags/data/gsm8k_test.jsonl"  # 替换为您的JSONL文件路径
             va_list = [0]
         else:
-            data_path = "examples/ags/scripts/data/gsm8k_validation.jsonl"  # 替换为您的JSONL文件路径
+            data_path = "examples/ags/data/gsm8k_validation.jsonl"  # 替换为您的JSONL文件路径
             va_list = [155, 230, 137, 225, 96, 50, 130, 26, 79, 259, 131, 1, 242, 247, 191, 94, 185, 38, 104, 64,
                        68, 92, 118, 31, 107, 42, 141, 125, 18, 100, 135, 236, 145, 11, 217, 65, 170, 210, 82, 162,
                        235, 234, 186, 182, 190, 180, 189, 152, 181, 151, 187, 150, 183, 149, 147, 179, 188, 148,
                        184, 175, 178, 177, 160, 161, 158, 163, 164, 157, 156, 165, 166, 192, 167, 168, 154, 169,
                        171, 172, 153, 173, 174, 159, 176, 0, 202, 193, 194, 229, 231, 232, 233, 237, 238, 239, 240,
                        241, 243, 244, 245, 246]
+            va_list = [0]
 
         graph = await load_graph()
         
