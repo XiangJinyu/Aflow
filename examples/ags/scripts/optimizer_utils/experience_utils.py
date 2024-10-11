@@ -51,8 +51,8 @@ class ExperienceUtils:
         print(f"Processed experience data saved to {output_path}")
         return experience_data
 
-    def format_experience(self, processed_experience, current_round):
-        experience_data = processed_experience.get(current_round)
+    def format_experience(self, processed_experience, sample_round):
+        experience_data = processed_experience.get(sample_round)
         if experience_data:
             experience = f"Original Score: {experience_data['score']}\n"
             experience += "These are some conclusions drawn from experience:\n\n"
@@ -62,8 +62,21 @@ class ExperienceUtils:
                 experience += f"-Absolutely prohibit {value['modification']} \n"
             experience += "\n\nNote: Take into account past failures and avoid repeating the same mistakes, as these failures indicate that these approaches are ineffective. You must fundamentally change your way of thinking, rather than simply using more advanced Python syntax like for, if, else, etc., or modifying the prompt."
         else:
-            experience = f"No experience data found for round {current_round}."
+            experience = f"No experience data found for round {sample_round}."
         return experience
+
+    def check_modification(self, processed_experience, modification, sample_round):
+        experience_data = processed_experience.get(sample_round)
+        if experience_data:
+            for key, value in experience_data["failure"].items():
+                if value['modification'] == modification:
+                    return False
+            for key, value in experience_data["success"].items():
+                if value['modification'] == modification:
+                    return False
+            return True
+        else:
+            return True  # 如果 experience_data 为空，也返回 True
 
     def create_experience_data(self, sample, modification):
         return {

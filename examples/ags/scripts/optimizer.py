@@ -16,6 +16,7 @@ from examples.ags.scripts.optimizer_utils.graph_utils import GraphUtils
 from examples.ags.scripts.optimizer_utils.data_utils import DataUtils
 from examples.ags.scripts.optimizer_utils.experience_utils import ExperienceUtils
 from examples.ags.scripts.optimizer_utils.evaluation_utils import EvaluationUtils
+from examples.ags.scripts.optimizer_utils.convergence_utils import ConvergenceUtils
 
 from examples.ags.scripts.prompts.optimize_prompt import (
     GRAPH_CUSTOM_USE,
@@ -44,9 +45,10 @@ class Optimizer:
             exec_llm_config,
             operators: List,
             sample: int,
+            check_convergence: bool = False,
             optimized_path: str = None,
             initial_round: int = 1,
-            max_rounds: int or None = 20
+            max_rounds: int = 20
     ) -> None:
         self.optimize_llm_config = opt_llm_config
         self.optimize_llm = create_llm_instance(self.optimize_llm_config)
@@ -54,6 +56,7 @@ class Optimizer:
 
         self.dataset = dataset
         self.type = question_type
+        self.check_convergence = check_convergence
 
         self.graph = None
         self.operators = operators
@@ -68,6 +71,7 @@ class Optimizer:
         self.data_utils = DataUtils(self.root_path)
         self.experience_utils = ExperienceUtils(self.root_path)
         self.evaluation_utils = EvaluationUtils(self.root_path)
+        self.convergence_utils = ConvergenceUtils(self.root_path)
 
     def optimize(self, mode: OptimizerType = "Graph"):
         if mode == "Test":
@@ -103,11 +107,20 @@ class Optimizer:
                     asyncio.set_event_loop(loop)
             self.round += 1
             print(f"Score for round {self.round}: {score}")
+
+            converged, convergence_round, final_round = self.convergence_utils.check_convergence(top_k=3)
+
+            if converged and self.check_convergence:
+
+                print(f"检测到收敛，发生在第 {convergence_round} 轮，最终轮次为 {final_round} 轮")
+                # 打印每轮的平均分和标准差
+                self.convergence_utils.print_results()
+                break
+
             time.sleep(5)
 
     async def _optimize_graph(self):
         validation_n = 1
-
         graph_path = f"{self.root_path}/graphs"
         data = self.data_utils.load_results(graph_path)
 
@@ -117,30 +130,41 @@ class Optimizer:
             self.graph = self.graph_utils.load_graph(self.round, graph_path)
             avg_score = await self.evaluation_utils.evaluate_graph(self, directory, validation_n, data, initial=True)
 
-        directory = self.graph_utils.create_round_directory(graph_path, self.round + 1)
+        # 创建一个循环，直到生成的图满足检查条件
+        while True:
+            directory = self.graph_utils.create_round_directory(graph_path, self.round + 1)
 
-        top_rounds = self.data_utils.get_top_rounds(self.sample)
-        sample = self.data_utils.select_round(top_rounds)
+            top_rounds = self.data_utils.get_top_rounds(self.sample)
+            sample = self.data_utils.select_round(top_rounds)
 
-        prompt, graph_load = self.graph_utils.read_graph_files(sample["round"], graph_path)
-        graph = self.graph_utils.extract_solve_graph(graph_load)
+            prompt, graph_load = self.graph_utils.read_graph_files(sample["round"], graph_path)
+            graph = self.graph_utils.extract_solve_graph(graph_load)
 
-        processed_experience = self.experience_utils.load_experience()
-        experience = self.experience_utils.format_experience(processed_experience, sample["round"])
+            processed_experience = self.experience_utils.load_experience()
+            experience = self.experience_utils.format_experience(processed_experience, sample["round"])
 
-        operator_description = self.graph_utils.load_operators_description(self.operators)
-        log_data = self.data_utils.load_log(sample["round"])
+            operator_description = self.graph_utils.load_operators_description(self.operators)
+            log_data = self.data_utils.load_log(sample["round"])
 
-        graph_optimize_prompt = self.graph_utils.create_graph_optimize_prompt(
-            experience, sample["score"], graph[0], prompt, operator_description, self.type, log_data
-        )
+            graph_optimize_prompt = self.graph_utils.create_graph_optimize_prompt(
+                experience, sample["score"], graph[0], prompt, operator_description, self.type, log_data
+            )
 
-        graph_optimize_node = await ActionNode.from_pydantic(GraphOptimize).fill(
-            context=graph_optimize_prompt, mode="context_fill", llm=self.optimize_llm
-        )
+            graph_optimize_node = await ActionNode.from_pydantic(GraphOptimize).fill(
+                context=graph_optimize_prompt, mode="context_fill", llm=self.optimize_llm
+            )
 
-        response = await self.graph_utils.get_graph_optimize_response(graph_optimize_node)
+            response = await self.graph_utils.get_graph_optimize_response(graph_optimize_node)
 
+            # 检查修改是否满足条件
+            check = self.experience_utils.check_modification(processed_experience, response["modification"],
+                                                             sample["round"])
+
+            # 如果 `check` 为 True，跳出循环；否则重新生成图
+            if check:
+                break
+
+        # 将图保存并进行评估
         self.graph_utils.write_graph_files(directory, response, self.round + 1, self.dataset)
 
         experience = self.experience_utils.create_experience_data(sample, response["modification"])
@@ -154,7 +178,6 @@ class Optimizer:
         self.experience_utils.update_experience(directory, experience, avg_score)
 
         return avg_score
-
 
     async def test(self):
         rounds = [5]

@@ -19,6 +19,7 @@ question_type: QuestionType = "math"  # Ensure the type is consistent with Quest
 optimized_path: str = "examples/ags/scripts/optimized"  # Optimized Result Save Path
 initial_round: int = 1  # Corrected the case from Initial_round to initial_round
 max_rounds: int = 20
+check_convergence: bool = True
 
 # Initialize LLM Model
 four_o_llm_config = ModelsConfig.default().get("gpt-4o")
@@ -54,6 +55,7 @@ optimizer = Optimizer(
     question_type=question_type,
     opt_llm_config=claude_llm_config,
     exec_llm_config=four_o_llm_config,
+    check_convergence=check_convergence,
     operators=operators,
     optimized_path=optimized_path,
     sample=sample,
